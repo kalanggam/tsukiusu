@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::fs;
 
-mod dictcc;
+pub mod dictcc;
 
 pub struct Config {
     pub file_path: String, // Path to desired file
