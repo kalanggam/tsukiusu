@@ -21,7 +21,7 @@ impl std::fmt::Display for DictError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "Dictionary lookup error - ")?;
         match self {
-            DictError::UnsupportedLang(s) => write!(f, "unsupported language {}", s),
+            DictError::UnsupportedLang(s) => write!(f, "unsupported language target `{}`", s),
             DictError::HttpError(e) => e.fmt(f),
             DictError::ResponseError(e) => e.fmt(f),
             DictError::ParseError(e) => e.fmt(f),

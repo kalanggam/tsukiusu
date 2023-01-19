@@ -1,11 +1,12 @@
 /* DICTCC.RS
  * Author - Gil Locaylocay Caley (kalanggam)
  * 
- * dictcc.rs is a Rust port of rbaron/dict.cc.py which uses reqwest (a wrapper of hyper), 
+ * TODO: Parse HTML DOM into a returnable format
  */
 // external imports
 use std::collections::HashMap;
 use reqwest;
+use scraper::{Html, Selector, ElementRef};
 use url;
 
 // internal imports
@@ -24,8 +25,8 @@ const SUPPORTED_LANGS: &[&'static str] = &["en", "de"];
 // DictLookup
 // Struct for HTTP requests to retrieve words from dict.cc. URL takes following form:
 // ----------------
-// https:// [source_lang] [target_lang] .dict.cc/ ?s= [search_term]
-//          2-char code   2-char code                 search parameter
+// https:// [source_lang] - [target_lang] .dict.cc/ ?s= [search_term]
+//          2-char code     2-char code                 search parameter
 // The url is parsed immediately when DictLookup is built using `build`.
 struct DictLookup {
     url: url::Url,
@@ -52,7 +53,7 @@ impl DictLookup {
 
     // get_dict_url
     fn get_dict_url(source: String, target: String, search: String) -> Result<url::Url, DictError> {
-        let url = "https://".to_owned() + &source + &target + "dict.cc";
+        let url = "https://".to_owned() + &source + "-" + &target + ".dict.cc";
         let mut params = HashMap::new();
         params.insert("s", search.as_str());
         match url::Url::parse_with_params(&url, &params) {
@@ -68,17 +69,49 @@ impl DictLookup {
     }
 }
 
-// lookup
+fn get_terms(doc: String) -> Option<HashMap<String, String>> {
+    let document = Html::parse_document(&doc);
+    let mut terms = HashMap::new();
+    let selector = Selector::parse(".td7nl").unwrap();
+    let cells = document.select(&selector);
+
+    for item in cells {
+        if item.value().name().to_string() == "div" { continue } // skip langbar
+        print!("text parsing: ");
+        for child in item.children() {
+            if child.value().is_text() {
+                let text = child.value().as_text().unwrap();
+                if !text.is_empty() {
+                    print!("{}", text.to_string());
+                }
+            }
+            if child.value().is_element() {
+                let elem = child.value().as_element().unwrap();
+                match elem.name() {
+                    "dfn" => (),
+                    "div" => (),
+                    "sup" => print!(" ({})", ElementRef::wrap(child).unwrap().text().collect::<Vec<_>>().join("").to_string()),
+                    _ => print!("{}", ElementRef::wrap(child).unwrap().text().collect::<Vec<_>>().join("").to_string()),
+                }
+            }
+        }
+        println!("");
+    }
+
+    Some(terms)
+}
+
+// search
 // This function is what users can use
-pub fn lookup(source_lang: String, target_lang: String, search_term: String) -> Result<String, DictError> {
+pub fn search(source_lang: String, target_lang: String, search_term: String) -> Result<HashMap <String, String>, DictError> {
     // Check if language codes match supported languages
     if !(SUPPORTED_LANGS.iter().any(|&s| (s == &source_lang))) {
         return Err(DictError::UnsupportedLang(source_lang));
     } else if !(SUPPORTED_LANGS.iter().any(|&s| (s == &target_lang))) {
         return Err(DictError::UnsupportedLang(target_lang));
+    } else {
+        let lookup = DictLookup::build(source_lang, target_lang, search_term)?;
+        let resp = get_terms(lookup.get_response()?).unwrap();
+        Ok(resp)
     }
-
-    let req = DictLookup::build(source_lang, target_lang, search_term)?;
-    let resp = req.get_response()?;
-    Ok(resp)
 }
